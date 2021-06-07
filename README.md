@@ -1,18 +1,9 @@
-## Dotnet ef
-
-### Create a migration
+# Start
 
 ```bash
-dotnet ef migrations add "Initial Migrations"
-```
-
-### Migration
-
-```bash
+// migrate all the tables to SQLite
 dotnet ef database update
-```
 
-```bash
-dotnet ef migration add "Adding authentication to our Api"
-dotnet ef database update
+// run dotnet web aplication
+dotnet watch run
 ```
