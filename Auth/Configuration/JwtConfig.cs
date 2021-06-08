@@ -1,4 +1,4 @@
-namespace TodoApp.Configuration
+namespace TodoApp.Auth.Configuration
 {
     public class JwtConfig
     {
