@@ -68,7 +68,7 @@ namespace TodoApp.Auth.Controller
                     Success = false
                 });
 
-            var jwtToken = await GenerateJwtTokens(newUser);
+            var jwtToken = await GenerateJwtToken(newUser);
 
             // Return the token to the API
             return Ok(jwtToken);
@@ -101,7 +101,7 @@ namespace TodoApp.Auth.Controller
                     Success = false
                 });
 
-            var jwtToken = await GenerateJwtTokens(existingUser);
+            var jwtToken = await GenerateJwtToken(existingUser);
 
             return Ok(jwtToken);
         }
@@ -113,6 +113,7 @@ namespace TodoApp.Auth.Controller
         {
             var result = await VerifyAndGenerateToken(tokenRequest);
 
+            Console.WriteLine(result);
             if (result == null)
             {
                 return BadRequest(new RegistrationResponse()
@@ -129,7 +130,7 @@ namespace TodoApp.Auth.Controller
         }
 
         // Generate a token TODO passing to a new file.cs into auth.utils
-        private async Task<AuthResult> GenerateJwtTokens(IdentityUser user)
+        private async Task<AuthResult> GenerateJwtToken(IdentityUser user)
         {
             var jwtTokenHandler = new JwtSecurityTokenHandler();
             var key = Encoding.ASCII.GetBytes(_jwtConfig.Secret);
@@ -170,81 +171,73 @@ namespace TodoApp.Auth.Controller
             {
                 Token = jwtToken,
                 Success = true,
-                RefreshTokeRefrestn = refreshToken.Token
+                RefreshToken = refreshToken.Token
             };
         }
 
         private async Task<AuthResult> VerifyAndGenerateToken(TokenRequest tokenRequest)
         {
             var jwtTokenHandler = new JwtSecurityTokenHandler();
-            try
-            {
-                // Validation 1 - Validation JWT token format
-                var tokenInVerification = jwtTokenHandler.ValidateToken(tokenRequest.Token, _tokenValidationParams,
-                    out var validatedToken);
 
-                // Validation 2 - Validate encryption algorithm
-                if (validatedToken is JwtSecurityToken jwtSecurityToken)
+            try
+            {   
+                // Validation 1 - Validation JWT token format
+                var tokenInVerification = jwtTokenHandler.ValidateToken(tokenRequest.Token, _tokenValidationParams, out var validatedToken);
+
+                // Validation 2 - Validate encryption alg
+                if(validatedToken is JwtSecurityToken jwtSecurityToken)
                 {
-                    var result = jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256,
-                        StringComparison.InvariantCultureIgnoreCase);
-                    if (result) return null;
+                    var result = jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase);
+
+                    if(result == false) {
+                        return null;
+                    }
                 }
 
-                // Validation 3 - validate expiration date
-                var utcExpiryDate = long.Parse(tokenInVerification.Claims
-                    .FirstOrDefault(x => x.Type == JwtRegisteredClaimNames.Exp)
-                    ?.Value ?? string.Empty);
+                // Validation 3 - validate expiry date
+                var utcExpiryDate = long.Parse(tokenInVerification.Claims.FirstOrDefault(x => x.Type == JwtRegisteredClaimNames.Exp)?.Value ?? string.Empty);
 
                 var expiryDate = UnixTimeStampToDatetime.Convert(utcExpiryDate);
-                if (expiryDate > DateTime.UtcNow)
-                {
-                    return new AuthResult()
-                    {
+
+                if(expiryDate > DateTime.UtcNow) {
+                    return new AuthResult() {
                         Success = false,
-                        Errors = new List<string>()
-                        {
+                        Errors = new List<string>() {
                             "Token has not yet expired"
                         }
                     };
                 }
 
-                // Validation 4 - validate existence of the token
-                var storedToken =
-                    await _apiDbContext.RefreshTokens.FirstOrDefaultAsync(x => x.Token == tokenRequest.RefreshToken);
-                if (storedToken == null)
+                // validation 4 - validate existence of the token
+                var storedToken = await _apiDbContext.RefreshTokens.FirstOrDefaultAsync(x => x.Token == tokenRequest.RefreshToken);
+
+                if(storedToken == null)
                 {
-                    return new AuthResult()
-                    {
+                    return new AuthResult() {
                         Success = false,
-                        Errors = new List<string>()
-                        {
+                        Errors = new List<string>() {
                             "Token does not exist"
                         }
                     };
                 }
 
                 // Validation 5 - validate if used
-                if (storedToken.IsUsed)
+                if(storedToken.IsUsed)
                 {
-                    return new AuthResult()
-                    {
+                    return new AuthResult() {
                         Success = false,
-                        Errors = new List<string>()
-                        {
+                        Errors = new List<string>() {
                             "Token has been used"
                         }
                     };
                 }
 
                 // Validation 6 - validate if revoked
-                if (storedToken.IsRevoked)
+                if(storedToken.IsRevoked)
                 {
-                    return new AuthResult()
-                    {
+                    return new AuthResult() {
                         Success = false,
-                        Errors = new List<string>()
-                        {
+                        Errors = new List<string>() {
                             "Token has been revoked"
                         }
                     };
@@ -253,52 +246,45 @@ namespace TodoApp.Auth.Controller
                 // Validation 7 - validate the id
                 var jti = tokenInVerification.Claims.FirstOrDefault(x => x.Type == JwtRegisteredClaimNames.Jti)?.Value;
 
-                if (storedToken.JwtId != jti)
+                if(storedToken.JwtId != jti)
                 {
-                    return new AuthResult()
-                    {
+                    return new AuthResult() {
                         Success = false,
-                        Errors = new List<string>()
-                        {
+                        Errors = new List<string>() {
                             "Token doesn't match"
                         }
                     };
                 }
 
-                // update current token
+                // update current token 
                 storedToken.IsUsed = true;
                 _apiDbContext.RefreshTokens.Update(storedToken);
                 await _apiDbContext.SaveChangesAsync();
-
-                //generate a new token
+                
+                // Generate a new token
                 var dbUser = await _userManager.FindByIdAsync(storedToken.UserId);
-                return await GenerateJwtTokens(dbUser);
+                return await GenerateJwtToken(dbUser);
             }
-            catch (Exception ex)
+            catch(Exception ex)
             {
-                if (ex.Message.Contains("Lifetime validation failed. The token is expired."))
-                {
-                    return new AuthResult()
-                    {
+                if(ex.Message.Contains("Lifetime validation failed. The token is expired.")) {
+
+                      return new AuthResult() {
                         Success = false,
-                        Errors = new List<string>()
-                        {
-                            "Token has expired please re-login."
+                        Errors = new List<string>() {
+                            "Token has expired please re-login"
+                        }
+                    };
+                
+                } else {
+                      return new AuthResult() {
+                        Success = false,
+                        Errors = new List<string>() {
+                            "Something went wrong."
                         }
                     };
                 }
-                else
-                {
-                    return new AuthResult()
-                    {
-                        Success = false,
-                        Errors = new List<string>()
-                        {
-                            "Something wet wrong."
-                        }
-                    };
-                }
-            }
+            } 
         }
     }
 }

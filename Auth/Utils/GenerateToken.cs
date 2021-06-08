@@ -64,7 +64,7 @@ namespace TodoApp.Auth.Utils
             {
                 Token = jwtToken,
                 Success = true,
-                RefreshTokeRefrestn = refreshToken.Token
+                RefreshToken = refreshToken.Token
             };
         }
     }
