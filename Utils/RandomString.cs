@@ -3,7 +3,7 @@ using System.Linq;
 
 namespace TodoApp.Utils
 {
-    public class RandomString
+    public static class RandomString
     {
         public static string GenerateRandomString(int length)
         {
